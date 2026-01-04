@@ -1,0 +1,52 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © sergeycrusher
+
+//@version=6
+strategy(
+    "Золотой и Мертвый Крест (MA Crossover)", 
+    overlay=true, 
+    initial_capital=100000, // Начальный капитал
+    currency=currency.RUB, // Валюта - Рубли
+    commission_type=strategy.commission.percent, // Комиссия в %
+    commission_value=0.04, // Комиссия с каждой сделки
+    default_qty_type=strategy.percent_of_equity, // Размер вхождения в сделку в %
+    default_qty_value=99 // открываем позицию 99% от размера портфеля
+)
+
+// 1. Входные параметры (можно менять в настройках)
+fast_length = input.int(100, "Период быстрой MA", minval=1)
+slow_length = input.int(400, "Период медленной MA", minval=2)
+stop_loss_percent = input.float(2.0, "Стоп-лосс %", minval=0.5, step=0.1) / 100
+take_level_percent = input.float(0.2, "Минимальный тейк-профит %", minval=0.1, step=0.1) / 100
+take_profit_percent = input.float(1.0, "Принудительный тейк-профит %", minval=0.2, step=0.1) / 100
+
+// 2. Расчет индикаторов
+fast_ma = ta.ema(close, fast_length)
+slow_ma = ta.ema(close, slow_length)
+
+// 3. Определение условий (сигналов)
+golden_cross = ta.crossover(fast_ma, slow_ma)  // Золотой крест - сигнал на ПОКУПКУ
+death_cross = ta.crossunder(fast_ma, slow_ma) // Мертвый крест - сигнал на ПРОДАЖУ
+
+// 4. Расчет уровней
+stop_loss = strategy.position_avg_price * (1 - stop_loss_percent) // Цена принудительного закрытия
+take_level = strategy.position_avg_price * (1 + take_level_percent) // Минимальная цена при которой сработает мёртный крест
+take_profit = strategy.position_avg_price * (1 + take_profit_percent) // Принудительный тейк-профит
+
+// 5. Исполнение ордеров
+if (golden_cross)
+    strategy.entry("Покупка", strategy.long) // Открываем лонг (Золотой крест)
+
+// Условия при которых закрывается сделка:
+// 5.1 - Сработал мёртвый крест и цена выше минимальной для закрытия
+// 5.2 - Принудительное закрытие позиции по stop stop_loss
+// 5.3 - Принудительное закрытие позиции по take profit
+if (death_cross and close > take_level) or (close < stop_loss) or (close > take_profit)
+    strategy.close_all(str.tostring((close - strategy.position_avg_price)*strategy.position_size)+'₽') // Закрываем позицию
+
+// 6. Визуализация на графике
+plot(fast_ma, "Быстрая MA", color=color.new(color.blue, 0), linewidth=2)
+plot(slow_ma, "Медленная MA", color=color.new(color.red, 0), linewidth=2)
+
+// Фоновая заливка между MA для наглядности
+fill(plot(fast_ma), plot(slow_ma), color=fast_ma > slow_ma ? color.new(color.green, 90) : color.new(color.red, 90))
